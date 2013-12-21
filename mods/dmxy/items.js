@@ -21,5 +21,5 @@ exports.BattleItems = {
                 num: 271,
                 gen: 4,
                 desc: "Holder's two-turn moves complete in one turn (except Sky Drop). Single use."
-        },
+        }
 };
