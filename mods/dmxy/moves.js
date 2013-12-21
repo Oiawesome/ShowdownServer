@@ -31,5 +31,5 @@ exports.BattleMovedex = {
                 secondary: false,
                 target: "normal",
                 type: "Fighting"
-        },
+        }
 };
