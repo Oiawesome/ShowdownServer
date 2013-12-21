@@ -67,5 +67,5 @@ exports.BattleAbilities = {
                 name: "Contagious",
                 rating: 2,
                 num: 143
-        },
+        }
 };
