@@ -128,10 +128,13 @@ exports.BattleScripts = {
                   
                   this.modData('Learnsets', 'shaymin').learnset.boomburst = ['6L100'];
                   
-                  this.modData('Learnsets', 'meloetta').learnset.psytrike = ['6L100'];
+                  this.modData('Learnsets', 'meloetta').learnset.moonblast = ['6L100'];
                   this.modData('Learnsets', 'meloetta').learnset.boomburst = ['6L100'];
                   this.modData('Learnsets', 'meloetta').learnset.phantomforce = ['6L100'];
                   this.modData('Learnsets', 'meloetta').learnset.swordsdance = ['6M'];
+                  this.modData('Learnsets', 'meloetta').learnset.playrough = ['6L100'];
+                  this.modData('Learnsets', 'meloetta').learnset.playaround = ['6L100'];
+                  this.modData('Learnsets', 'meloetta').learnset.dazzlinggleam = ['6L100'];
                   
                   this.modData('Learnsets', 'arceus').learnset.playrough = ['6L100'];
                   this.modData('Learnsets', 'arceus').learnset.moonblast = ['6L100'];
