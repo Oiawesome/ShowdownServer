@@ -28,25 +28,29 @@ exports.BattleMovedex = {
                 target: "normal",
                 type: "Normal"
         },
-        "crosschop": {
-                num: 238,
-                accuracy: 95,
-                basePower: 100,
+        "playaround": {
+                num: -6,
+                gen: 6,
+                accuracy: 100,
+                basePower: 120,
                 category: "Physical",
-                desc: "Deals damage to one adjacent target with a higher chance for a critical hit. Makes contact.",
-                shortDesc: "High critical hit ratio.",
-                id: "crosschop",
+                desc: "Deals damage to one adjacent target and lowers the user's Attack and Defense by 1 stage. Makes contact.",
+                shortDesc: "Lowers the user's Attack and Defense by 1.",
+                id: "playaround",
                 isViable: true,
-                name: "Cross Chop",
-                pp: 10,
+                name: "Play Around",
+                pp: 5,
                 priority: 0,
                 isContact: true,
-                secondary: {
-                        chance: 15,
-                        volatileStatus: 'flinch'
+                self: {
+                        boosts: {
+                                atk: -1,
+                                def: -1
+                        }
                 },
+                secondary: false,
                 target: "normal",
-                type: "Fighting"
+                type: "Fairy"
         },
         "naturepower": {
                 num: 267,
@@ -71,7 +75,27 @@ exports.BattleMovedex = {
                 secondary: false,
                 target: "self",
                 type: "Normal"
-        },         
+        },        
+        "crosschop": {
+                num: 238,
+                accuracy: 95,
+                basePower: 100,
+                category: "Physical",
+                desc: "Deals damage to one adjacent target with a higher chance for a critical hit. Makes contact.",
+                shortDesc: "High critical hit ratio.",
+                id: "crosschop",
+                isViable: true,
+                name: "Cross Chop",
+                pp: 10,
+                priority: 0,
+                isContact: true,
+                secondary: {
+                        chance: 15,
+                        volatileStatus: 'flinch'
+                },
+                target: "normal",
+                type: "Fighting"
+        },
         "stoneedge": {
                 num: 444,
                 accuracy: 95,
@@ -230,22 +254,22 @@ exports.BattleMovedex = {
                 type: "Fairy"
         },
         "phantomforce": {
-		num: -6,
-		gen: 6,
-		accuracy: 100,
-		basePower: 100,
-		category: "Physical",
-		desc: "Deals damage to one adjacent target and breaks through Protect and Detect for this turn, allowing other Pokemon to attack the target normally. This attack charges on the first turn and strikes on the second. On the first turn, the user avoids all attacks. The user cannot make a move between turns. If the user is holding a Power Herb, the move completes in one turn. Makes contact.",
-		shortDesc: "Disappears turn 1. Hits turn 2. Breaks protection.",
-		id: "phantomforce",
-		name: "Phantom Force",
-		pp: 10,
-		priority: 0,
-		isContact: true,
-		secondary: false,
-		target: "normal",
-		type: "Ghost"
-	},
+                num: -6,
+                gen: 6,
+                accuracy: 100,
+                basePower: 100,
+                category: "Physical",
+                desc: "Deals damage to one adjacent target and breaks through Protect and Detect for this turn, allowing other Pokemon to attack the target normally. This attack charges on the first turn and strikes on the second. On the first turn, the user avoids all attacks. The user cannot make a move between turns. If the user is holding a Power Herb, the move completes in one turn. Makes contact.",
+                shortDesc: "Disappears turn 1. Hits turn 2. Breaks protection.",
+                id: "phantomforce",
+                name: "Phantom Force",
+                pp: 10,
+                priority: 0,
+                isContact: true,
+                secondary: false,
+                target: "normal",
+                type: "Ghost"
+        },
         "roaroftime": {
                 num: 459,
                 accuracy: 100,
