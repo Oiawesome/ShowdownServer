@@ -6,5 +6,9 @@ exports.BattleFormatsData = {
         arceusgod: {
                 inherit: true,
                 tier: 'Uber'
+        },
+        meloettapirouette: {
+                inherit: true,
+                tier: 'OU'
         }
 };
