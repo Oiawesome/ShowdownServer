@@ -28,6 +28,26 @@ exports.BattleMovedex = {
                 target: "normal",
                 type: "Normal"
         },
+        "poisonjab": {
+                num: 398,
+                accuracy: 100,
+                basePower: 95,
+                category: "Physical",
+                desc: "Deals damage to one adjacent target with a 30% chance to poison it. Makes contact.",
+                shortDesc: "30% chance to poison the target.",
+                id: "poisonjab",
+                isViable: true,
+                name: "Poison Jab",
+                pp: 20,
+                priority: 0,
+                isContact: true,
+                secondary: {
+                        chance: 30,
+                        status: 'psn'
+                },
+                target: "normal",
+                type: "Poison"
+        },        
         "playaround": {
                 num: -6,
                 gen: 6,
@@ -58,19 +78,18 @@ exports.BattleMovedex = {
                 basePower: 0,
                 category: "Status",
                 desc: "This move calls another move for use depending on the battle terrain: Thunderbolt in Electric Terrain, Energy Ball in Grassy Terrain, Moonblast in Misty Terrain, and Tri Attack in plain terrain.",
-                shortDesc: "Attack depends on terrain (default Tri Attack).",
+                shortDesc: "Attack depends on the users attacking stats.",
                 id: "naturepower",
                 isViable: true,
                 name: "Nature Power",
                 pp: 20,
                 priority: 0,
                 onHit: function(target) {
-                        var moveToUse = 'earthquake';
-                        if (this.isTerrain('electricterrain')) moveToUse = 'thunderbolt';
-                        else if (this.isTerrain('grassyterrain')) moveToUse = 'energyball';
-                        else if (this.isTerrain('mistyterrain')) moveToUse = 'moonblast';
-
-                        this.useMove(moveToUse, target);
+                        if (target.spa <= target.atk) { // Shedinja clause
+                                var moveToUse = 'earthquake';
+                        },
+                        else if (target.atk <= target.spa) {
+                                var moveToUse = 'earthpower';
                 },
                 secondary: false,
                 target: "self",
@@ -95,6 +114,147 @@ exports.BattleMovedex = {
                 },
                 target: "normal",
                 type: "Fighting"
+        },
+        "steamray": {
+                num: 8000,
+                accuracy: true,
+                basePower: 0,
+                category: "Status",
+                desc: "Raises the user's SAttack and Speed by 1 stage.",
+                shortDesc: "Boosts the user's SAttack and Speed by 1.",
+                id: "steamray",
+                isViable: true,
+                name: "Steam Ray",
+                pp: 20,
+                priority: 0,
+                isSnatchable: true,
+                boosts: {
+                        spa: 1,
+                        spe: 1
+                },
+                secondary: false,
+                target: "self",
+                type: "Water"
+        },
+        "steamcannon": {
+                num: 503,
+                accuracy: 100,
+                basePower: 120,
+                category: "Special",
+                desc: "Deals damage to one adjacent target with a 30% chance to burn it. If the user is frozen, it thaws out just before attacking.",
+                shortDesc: "20% chance to burn the target. Thaws user.",
+                id: "steamcannon",
+                isViable: true,
+                name: "Steam Cannon",
+                pp: 15,
+                priority: 0,
+                thawsUser: true,
+                secondary: {
+                        chance: 20,
+                        status: 'brn'
+                },
+                target: "normal",
+                type: "Water"
+        },
+        "attackorder": {
+                num: 454,
+                accuracy: 100,
+                basePower: 100,
+                category: "Physical",
+                desc: "Deals damage to one adjacent target with a higher chance for a critical hit.",
+                shortDesc: "High critical hit ratio.",
+                id: "attackorder",
+                isViable: true,
+                name: "Attack Order",
+                pp: 15,
+                priority: 0,
+                critRatio: 2,
+                secondary: false,
+                target: "normal",
+                type: "Bug"
+        },
+        "aurasphere": {
+                num: 396,
+                accuracy: true,
+                basePower: 90,
+                category: "Special",
+                desc: "Deals damage to one adjacent or non-adjacent target and does not check accuracy.",
+                shortDesc: "This move does not check accuracy.",
+                id: "aurasphere",
+                isViable: true,
+                name: "Aura Sphere",
+                pp: 20,
+                priority: 0,
+                isPulseMove: true,
+                isBullet: true,
+                secondary: false,
+                target: "any",
+                type: "Fighting"
+        },
+        "iciclecrash": {
+                num: 556,
+                accuracy: 100,
+                basePower: 90,
+                category: "Physical",
+                desc: "Deals damage to one adjacent target with a 30% chance to flinch it.",
+                shortDesc: "30% chance to flinch the target.",
+                id: "iciclecrash",
+                isViable: true,
+                name: "Icicle Crash",
+                pp: 10,
+                priority: 0,
+                secondary: {
+                        chance: 30,
+                        volatileStatus: 'flinch'
+                },
+                target: "normal",
+                type: "Ice"
+        },
+        "poweruppunch": {
+                num: -6,
+                gen: 6,
+                accuracy: 100,
+                basePower: 60,
+                category: "Physical",
+                desc: "Hitting a target raises the Attack stat.",
+                shortDesc: "Hitting a target raises Attack by 1",
+                id: "poweruppunch",
+                name: "Power-Up Punch",
+                pp: 30,
+                priority: 0,
+                isContact: true,
+                secondary: {
+                        chance: 100,
+                        self: {
+                                boosts: {
+                                        atk: 1
+                                }
+                        }
+                },
+                target: "normal",
+                type: "Fighting"
+        },
+        "shadowball": {
+                num: 247,
+                accuracy: 100,
+                basePower: 90,
+                category: "Special",
+                desc: "Deals damage to one adjacent target with a 20% chance to lower its Special Defense by 1 stage.",
+                shortDesc: "20% chance to lower the target's Sp. Def by 1.",
+                id: "shadowball",
+                isViable: true,
+                name: "Shadow Ball",
+                pp: 15,
+                priority: 0,
+                isBullet: true,
+                secondary: {
+                        chance: 20,
+                        boosts: {
+                                spd: -1
+                        }
+                },
+                target: "normal",
+                type: "Ghost"
         },
         "stoneedge": {
                 num: 444,
