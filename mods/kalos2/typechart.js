@@ -28,7 +28,7 @@ exports.BattleTypeChart = {
       "Dark": 2,
       "Dragon": 0,
       "Electric": 0,
-      "Fairy": 0,
+      "Fairy": 1,
       "Fighting": 1,
       "Fire": 0,
       "Flying": 0,
@@ -95,7 +95,7 @@ exports.BattleTypeChart = {
   "Fairy": {
     "damageTaken": {
       "Bug": 3,
-      "Dark": 2,
+      "Dark": 1,
       "Dragon": 2,
       "Electric": 0,
       "Fairy": 0,
@@ -360,7 +360,7 @@ exports.BattleTypeChart = {
       "Electric": 0,
       "Fairy": 0,
       "Fighting": 1,
-      "Fire": 2,
+      "Fire": 0,
       "Flying": 2,
       "Ghost": 0,
       "Grass": 1,
