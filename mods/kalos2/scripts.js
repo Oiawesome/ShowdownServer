@@ -4,6 +4,7 @@ exports.BattleScripts = {
                   this.modData('Learnsets', 'fennekin').learnset.thunder = ['6M'];
                   this.modData('Learnsets', 'fennekin').learnset.calmmind = ['6M'];
                   this.modData('Learnsets', 'fennekin').learnset.batonpass = ['6T'];
+                  this.modData('Learnsets', 'delphox').learnset.moonblast = ['6L65'];
                   
                   this.modData('Learnsets', 'froakie').learnset.nightdaze = ['6E'];
                   this.modData('Learnsets', 'froakie').learnset.pursuit = ['6E'];
