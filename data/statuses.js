@@ -11,7 +11,7 @@ exports.BattleStatuses = {
 			this.add('-status', target, 'brn');
 		},
 		onBasePower: function(basePower, attacker, defender, move) {
-			if (move && move.category === 'Physical' && attacker && attacker.ability !== 'guts') {
+			if (move && move.category === 'Physical' && attacker && attacker.ability !== 'guts' && move.id !== 'facade') {
 				return this.chainModify(0.5); // This should really take place directly in the damage function but it's here for now
 			}
 		},
@@ -153,7 +153,10 @@ exports.BattleStatuses = {
 				delete pokemon.volatiles['trapped'];
 				return;
 			}
-			pokemon.trapped = true;
+			pokemon.tryTrap();
+		},
+		onStart: function(target) {
+			this.add('-activate', target, 'trapped')
 		}
 	},
 	partiallytrapped: {
@@ -181,24 +184,30 @@ exports.BattleStatuses = {
 			this.add('-end', pokemon, this.effectData.sourceEffect, '[partiallytrapped]');
 		},
 		onModifyPokemon: function(pokemon) {
-			pokemon.trapped = true;
+			pokemon.tryTrap();
 		}
 	},
 	lockedmove: {
 		// Outrage, Thrash, Petal Dance...
-		durationCallback: function() {
-			return this.random(2,4);
-		},
+		duration: 2,
 		onResidual: function(target) {
-			if (target.lastMove === 'struggle' || target.status === 'slp' || !target.moveThisTurn) {
+			if (target.status === 'slp') {
 				// don't lock, and bypass confusion for calming
 				delete target.volatiles['lockedmove'];
 			}
+			this.effectData.trueDuration--;
 		},
 		onStart: function(target, source, effect) {
+			this.effectData.trueDuration = this.random(2,4);
 			this.effectData.move = effect.id;
 		},
+		onRestart: function() {
+			if (this.effectData.trueDuration >= 2) {
+				this.effectData.duration = 2;
+			}
+		},
 		onEnd: function(target) {
+			if (this.effectData.trueDuration > 1) return;
 			this.add('-end', target, 'rampage');
 			target.addVolatile('confusion');
 		},
@@ -357,6 +366,42 @@ exports.BattleStatuses = {
 			this.add('-weather', 'none');
 		}
 	},
+	tornado: {
+		effectType: 'Weather',
+		duration: 5,
+		durationCallback: function(source, effect) {
+			if (source && source.item === 'galefeather') {
+				return 8;
+			}
+			return 5;
+		},
+		onBasePower: function(basePower, attacker, defender, move) {
+			if (move.type === 'Flying') {
+				this.debug('flying tornado boost boost');
+				return this.chainModify(1.5);
+			}
+			if (move.type === 'Electric') {
+				this.debug('tornado electric suppress');
+				return this.chainModify(0.5);
+			}
+		},
+		onStart: function(battle, source, effect) {
+			if (effect && effect.effectType === 'Ability' && this.gen <= 5) {
+				this.effectData.duration = 0;
+				this.add('-weather', 'Tornado', '[from] ability: '+effect, '[of] '+source);
+			} else {
+				this.add('-weather', 'Tornado');
+			}
+		},
+		onResidualOrder: 1,
+		onResidual: function() {
+			this.add('-weather', 'Tornado', '[upkeep]');
+			this.eachEvent('Weather');
+		},
+		onEnd: function() {
+			this.add('-weather', 'none');
+		}
+	},	
 	sunnyday: {
 		effectType: 'Weather',
 		duration: 5,

@@ -228,6 +228,7 @@ var BattlePokemon = (function() {
 		this.baseAbility = toId(set.ability);
 		this.ability = this.baseAbility;
 		this.item = toId(set.item);
+		this.canMegaEvo = (this.battle.getItem(this.item).megaEvolves === this.species);
 		this.abilityData = {id: this.ability};
 		this.itemData = {id: this.item};
 		this.speciesData = {id: this.speciesid};
@@ -372,7 +373,7 @@ var BattlePokemon = (function() {
 		}
 		if (init) return;
 
-		this.battle.runEvent('MaybeTrapPokemon', this);
+		if (this.runImmunity('trapped')) this.battle.runEvent('MaybeTrapPokemon', this);
 		for (var i = 0; i < this.battle.sides.length; ++i) {
 			var side = this.battle.sides[i];
 			if (side === this.side) continue;
@@ -391,8 +392,10 @@ var BattlePokemon = (function() {
 						// unreleased hidden ability
 						continue;
 					}
-					this.battle.singleEvent('FoeMaybeTrapPokemon',
-						this.battle.getAbility(ability), {}, this, pokemon);
+					if (this.runImmunity('trapped')) {
+						this.battle.singleEvent('FoeMaybeTrapPokemon',
+							this.battle.getAbility(ability), {}, this, pokemon);
+					}
 				}
 			}
 		}
@@ -536,7 +539,7 @@ var BattlePokemon = (function() {
 			var moveName = move.move;
 			if (move.id === 'hiddenpower') {
 				moveName = 'Hidden Power '+this.hpType;
-				if (this.hpPower != 70) moveName += ' '+this.hpPower;
+				if (this.gen < 6) moveName += ' '+this.hpPower;
 			}
 			moves.push({
 				move: moveName,
@@ -742,8 +745,9 @@ var BattlePokemon = (function() {
 				if (this.hasType(type[i])) return true;
 			}
 		} else {
-			if (this.types[0] === type) return true;
-			if (this.types[1] === type) return true;
+			for (var i=0; i<this.types.length; i++) {
+				if (this.types[i] === type) return true;
+			}
 		}
 		return false;
 	};
@@ -775,6 +779,13 @@ var BattlePokemon = (function() {
 		}
 		return d;
 	};
+	BattlePokemon.prototype.tryTrap = function() {
+		if (this.runImmunity('trapped')) {
+			this.trapped = true;
+			return true;
+		}
+		return false;
+	}
 	BattlePokemon.prototype.hasMove = function(moveid) {
 		moveid = toId(moveid);
 		if (moveid.substr(0,11) === 'hiddenpower') moveid = 'hiddenpower';
@@ -1095,12 +1106,15 @@ var BattlePokemon = (function() {
 			return true;
 		}
 		if (this.negateImmunity[type]) return true;
-		if (!this.negateImmunity['Type'] && !this.battle.getImmunity(type, this)) {
-			this.battle.debug('natural immunity');
-			if (message) {
-				this.battle.add('-immune', this, '[msg]');
+		if (!(this.negateImmunity['Type'] && type in this.battle.data.TypeChart)) {
+			// Ring Target not active
+			if (!this.battle.getImmunity(type, this)) {
+				this.battle.debug('natural immunity');
+				if (message) {
+					this.battle.add('-immune', this, '[msg]');
+				}
+				return false;
 			}
-			return false;
 		}
 		var immunity = this.battle.runEvent('Immunity', this, null, null, type);
 		if (!immunity) {
@@ -1136,6 +1150,10 @@ var BattleSide = (function() {
 		case 'doubles':
 			this.active = [null, null];
 			break;
+          case 'triples': case 'rotation':
+                              this.active = [null, null, null];
+                              break;
+		
 		}
 
 		this.team = this.battle.getTeam(this, team);
@@ -1179,7 +1197,8 @@ var BattleSide = (function() {
 					return move;
 				}),
 				baseAbility: pokemon.baseAbility,
-				item: pokemon.item
+				item: pokemon.item,
+				canMegaEvo: pokemon.canMegaEvo
 			});
 		}
 		return data;
@@ -1895,7 +1914,6 @@ var Battle = (function() {
 		for (var i=0; i<statuses.length; i++) {
 			var status = statuses[i].status;
 			var thing = statuses[i].thing;
-			if (thing.fainted) continue;
 			//this.debug('match '+eventid+': '+status.id+' '+status.effectType);
 			if (status.effectType === 'Status' && thing.status !== status.id) {
 				// it's changed; call it off
@@ -2060,7 +2078,6 @@ var Battle = (function() {
 			return statuses;
 		}
 
-		if (thing.fainted) return statuses;
 		if (!thing.getStatus) {
 			this.debug(JSON.stringify(thing));
 			return statuses;
@@ -2110,14 +2127,17 @@ var Battle = (function() {
 			if (foeCallbackType.substr(0,5) === 'onFoe') {
 				eventName = foeCallbackType.substr(5);
 				for (var i=0; i<allyActive.length; i++) {
+					if (!allyActive[i] || allyActive[i].fainted) continue;
 					statuses = statuses.concat(this.getRelevantEffectsInner(allyActive[i], 'onAlly'+eventName,null,null,false,false, getAll));
 					statuses = statuses.concat(this.getRelevantEffectsInner(allyActive[i], 'onAny'+eventName,null,null,false,false, getAll));
 				}
 				for (var i=0; i<foeActive.length; i++) {
+					if (!foeActive[i] || foeActive[i].fainted) continue;
 					statuses = statuses.concat(this.getRelevantEffectsInner(foeActive[i], 'onAny'+eventName,null,null,false,false, getAll));
 				}
 			}
 			for (var i=0; i<foeActive.length; i++) {
+				if (!foeActive[i] || foeActive[i].fainted) continue;
 				statuses = statuses.concat(this.getRelevantEffectsInner(foeActive[i], foeCallbackType,null,null,false,false, getAll));
 			}
 		}
@@ -2425,6 +2445,7 @@ var Battle = (function() {
 		this.p1.foe = this.p2;
 
 		this.add('gametype', this.gameType);
+		this.add('gen', this.gen);
 
 		var format = this.getFormat();
 		Tools.mod(format.mod).getBanlistTable(format); // fill in format ruleset
@@ -2712,8 +2733,13 @@ var Battle = (function() {
 		}
 		basePower = clampIntRange(basePower, 1);
 
-		move.critRatio = clampIntRange(move.critRatio, 0, 5);
-		var critMult = [0, 16, 8, 4, 3, 2];
+		if (this.gen <= 5) {
+			move.critRatio = clampIntRange(move.critRatio, 0, 5);
+			var critMult = [0, 16, 8, 4, 3, 2];
+		} else {
+			move.critRatio = clampIntRange(move.critRatio, 0, 4);
+			var critMult = [0, 16, 8, 2, 1];
+		}
 
 		move.crit = move.willCrit || false;
 		if (move.willCrit === undefined) {
@@ -2811,19 +2837,20 @@ var Battle = (function() {
 			baseDamage = this.modify(baseDamage, move.stab || 1.5);
 		}
 		// types
-		var totalTypeMod = this.getEffectiveness(type, target);
-		totalTypeMod = this.singleEvent('ModifyEffectiveness', move, null, target, pokemon, move, totalTypeMod);
+		var totalTypeMod = this.getEffectiveness(move, target, pokemon);
+
+		totalTypeMod = clampIntRange(totalTypeMod, -3, 3);
 		if (totalTypeMod > 0) {
 			if (!suppressMessages) this.add('-supereffective', target);
-			baseDamage *= 2;
-			if (totalTypeMod >= 2) {
+
+			for (var i=0; i<totalTypeMod; i++) {
 				baseDamage *= 2;
 			}
 		}
 		if (totalTypeMod < 0) {
 			if (!suppressMessages) this.add('-resisted', target);
-			baseDamage = Math.floor(baseDamage/2);
-			if (totalTypeMod <= -2) {
+
+			for (var i=0; i>totalTypeMod; i--) {
 				baseDamage = Math.floor(baseDamage/2);
 			}
 		}
@@ -3191,7 +3218,22 @@ var Battle = (function() {
 			}
 			break;
 		case 'beforeTurn':
-			this.eachEvent('BeforeTurn');
+                        this.eachEvent('BeforeTurn');
+                        // In triples, check that the Pokémon can touch eachother.
+                              if (this.format === 'triples' && this.sides[0].length === 1 && this.sides[0].length === 1) {
+                                for (var p in this.sides[0].active) {
+                                          if (!this.sides[0].active[p].fainted && p !== 1) {
+                                                    this.switchIn(this.sides[0].active[p], 1);
+                                                    break;
+                                          }
+                                }
+                                for (var p in this.sides[1].active) {
+                                          if (!this.sides[1].active[p].fainted && p !== 1) {
+                                                    this.switchIn(this.sides[1].active[p], 1);
+                                                    break;
+                                          }
+                                }
+                              }
 			break;
 		case 'residual':
 			this.add('');

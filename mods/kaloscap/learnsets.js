@@ -1,0 +1,3 @@
+exports.BattleLearnsets = {
+visioccipter:{learnset:{gust:["6L100"],leer:["6L100"],doublekick:["6L100"],quickattack:["6L100"],aircutter:["6L100"],roost:["6L100"],lockon:["6L100"],airslash:["6L100"],knockoff:["6L100"],hypervoice:["6L100"],acrobatics:["6L100"],closecombat:["6L100"],bravebird:["6L100"],aurasphere:["6L100"],focusblast:["6L100"],honeclaws:["6L100"],roar:["6L100"],toxic:["6L100"],bulkup:["6L100"],hiddenpower:["6L100"],taunt:["6L100"],hyperbeam:["6L100"],protect:["6L100"],psychic:["6L100"],shadowball:["6L100"],sludgewave:["6L100"],lowsweep:["6L100"],overheat:["6L100"],energyball:["6L100"],acrobatics:["6L100"],grassknot:["6L100"],uturn:["6L100"],wildcharge:["6L100"],fly:["6L100"],strength:["6L100"],hurricane:["6L100"]}},
+};

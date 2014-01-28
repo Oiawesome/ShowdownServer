@@ -2,9 +2,9 @@ exports.BattleMovedex = {
         "triattack": {
                 num: 161,
                 accuracy: 100,
-                basePower: 80,
+                basePower: 30,
                 category: "Special",
-                desc: "Deals damage to one adjacent target with a 20% chance to either burn, freeze, or paralyze it.",
+                desc: "3 multi hits. Deals damage to one adjacent target with a 20% chance to either burn, freeze, or paralyze it.",
                 shortDesc: "20% chance to paralyze or burn or freeze target.",
                 id: "triattack",
                 isViable: true,
@@ -28,6 +28,165 @@ exports.BattleMovedex = {
                 target: "normal",
                 type: "Normal"
         },
+	"stealthrock": {
+		num: 446,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		desc: "Sets up a hazard on the foe's side of the field, damaging each foe that switches in. Can be used only once before failing. Foes lose 1/32, 1/16, 1/8, 1/4, or 1/2 of their maximum HP, rounded down, based on their weakness to the Rock-type; 0.25x, 0.5x, neutral, 2x, or 4x, respectively. Can be removed from the foe's side if any foe uses Rapid Spin or is hit by Defog. Pokemon protected by Magic Coat or the Ability Magic Bounce are unaffected and instead use this move themselves. (CAP: Pokemon with the Ability Mountaineer are immune.) Rock types absorb this hazard.",
+		shortDesc: "Hurts foes on switch-in. Factors Rock weakness. Rock types absorb this hazard, Pokemon with a ground immunity are immune to this hazard.",
+		id: "stealthrock",
+		isViable: true,
+		name: "Stealth Rock",
+		pp: 20,
+		priority: 0,
+		isBounceable: true,
+		sideCondition: 'stealthrock',
+		effect: {
+			// this is a side condition
+			onStart: function(side) {
+				this.add('-sidestart',side,'move: Stealth Rock');
+			},
+
+			onSwitchIn: function(pokemon) {
+				if (!pokemon.runImmunity('Ground')) return;
+				if (pokemon.hasType('Rock')) {
+					this.add('-sideend', pokemon.side, 'move: Stealth Rock', '[of] '+pokemon);
+					pokemon.side.removeSideCondition('stealthrock');
+				} else {
+				var typeMod = this.getEffectiveness('Rock', pokemon);
+				var factor = 8;
+				if (typeMod == 1) factor = 4;
+				if (typeMod >= 2) factor = 2;
+				if (typeMod == -1) factor = 16;
+				if (typeMod <= -2) factor = 32;
+				var damage = this.damage(pokemon.maxhp/factor);
+			}
+			}	
+		},
+		secondary: false,
+		target: "foeSide",
+		type: "Rock"
+	},
+	"freezedry": {
+		num: 573,
+		accuracy: 100,
+		basePower: 85,
+		category: "Special",
+		desc: "Deals damage to one adjacent target with a 10% chance to freeze it. Super-effective against Water-type Pokemon",
+		shortDesc: "Super-effective against Water. 10% freeze chance.",
+		id: "freezedry",
+		name: "Freeze-Dry",
+		pp: 20,
+		priority: 0,
+		getEffectiveness: function(source, target, pokemon) {
+			var type = source.type || source;
+			var totalTypeMod = 0;
+			var tarType = '';
+			for (var i=0; i<target.types.length; i++) {
+				tarType = target.types[i];
+				if (!this.data.TypeChart[tarType]) continue;
+				if (tarType === 'Water') {
+					totalTypeMod++;
+					continue;
+				}
+				var typeMod = this.data.TypeChart[tarType].damageTaken[type];
+				if (typeMod === 1) { // super-effective
+					totalTypeMod++;
+				}
+				if (typeMod === 2) { // resist
+					totalTypeMod--;
+				}
+			}
+			return totalTypeMod;
+		},
+		secondary: {
+			chance: 10,
+			status: 'frz'
+		},
+		target: "normal",
+		type: "Ice"
+	},	
+	"trickroom": {
+		num: 433,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		desc: "For 5 turns, all active Pokemon with lower Speed will move before those with higher Speed, within their priority brackets. If this move is used during the effect, the effect ends. Priority -7.",
+		shortDesc: "For 5 turns, slower Pokemon move first.",
+		id: "trickroom",
+		isViable: true,
+		name: "Trick Room",
+		pp: 5,
+		priority: -7,
+		onHitField: function(target, source, effect) {
+			if (this.pseudoWeather['trickroom']) {
+				this.removePseudoWeather('trickroom', source, effect, '[of] '+source);
+			} else {
+				this.addPseudoWeather('trickroom', source, effect, '[of] '+source);
+			}
+		},
+		effect: {
+			duration: 7,
+			durationCallback: function(target, source, effect) {
+				if (source && source.ability === 'persistent') {
+					return 7;
+				}
+				return 7;
+			},
+			onStart: function(target, source) {
+				this.add('-fieldstart', 'move: Trick Room', '[of] '+source);
+				this.getStatCallback = function(stat, statName) {
+					// If stat is speed and does not overflow (Trick Room Glitch) return negative speed.
+					if (statName === 'spe' && stat <= 1809) return -stat;
+					return stat;
+				}
+			},
+			onResidualOrder: 23,
+			onEnd: function() {
+				this.add('-fieldend', 'move: Trick Room');
+				this.getStatCallback = null;
+			}
+		},
+		secondary: false,
+		target: "all",
+		type: "Psychic"
+	},	
+	"knockoff": {
+		num: 282,
+		accuracy: 100,
+		basePower: 40,
+		category: "Physical",
+		desc: "Deals damage to one adjacent target and causes it to drop its held item. Does 50% more damage if the target is holding an item. This move cannot force Pokemon with the Ability Sticky Hold to lose their held item, or force a Giratina, an Arceus, or a Genesect to lose their Griseous Orb, Plate, or Drive, respectively. It also cannot remove Mega Stones. Items lost to this move cannot be regained with Recycle. Makes contact.",
+		shortDesc: "Removes the target's held item. 1.5x damage if the target is holding an item.",
+		id: "knockoff",
+		isViable: true,
+		name: "Knock Off",
+		pp: 20,
+		priority: 0,
+		isContact: true,
+		onBasePowerPriority: 4,
+		onBasePower: function(basePower, pokemon, target) {
+			var item = target.getItem();
+			if (item.id && !item.megaStone) {
+				return this.chainModify(1.5);
+			}
+		},
+		onHit: function(target, source) {
+			var item = target.getItem();
+			if (item.id === 'mail') {
+				target.setItem('');
+			} else {
+				item = target.takeItem(source);
+			}
+			if (item) {
+				this.add('-enditem', target, item.name, '[from] move: Knock Off', '[of] '+source);
+			}
+		},
+		secondary: false,
+		target: "normal",
+		type: "Dark"
+	},	
         "poisonjab": {
                 num: 398,
                 accuracy: 100,
@@ -72,29 +231,14 @@ exports.BattleMovedex = {
                 target: "normal",
                 type: "Fairy"
         },
-        "naturepower": {
-                num: 267,
-                accuracy: true,
-                basePower: 0,
-                category: "Status",
-                desc: "This move calls another move for use depending on the battle terrain: Thunderbolt in Electric Terrain, Energy Ball in Grassy Terrain, Moonblast in Misty Terrain, and Tri Attack in plain terrain.",
-                shortDesc: "Attack depends on the users attacking stats.",
-                id: "naturepower",
-                isViable: true,
-                name: "Nature Power",
-                pp: 20,
-                priority: 0,
-                onHit: function(target) {
-                        if (target.spa <= target.atk) { // Shedinja clause
-                                var moveToUse = 'earthquake';
-                        },
-                        else if (target.atk <= target.spa) {
-                                var moveToUse = 'earthpower';
-                },
-                secondary: false,
-                target: "self",
-                type: "Normal"
-        },        
+ 	naturepower: {
+		inherit: true,
+		desc: "This move calls another move for use depending on the battle terrain. Earthquake in Wi-Fi battles.",
+		shortDesc: "Attack changes based on terrain. (Earthquake)",
+		onHit: function(target) {
+			this.useMove('earthquake', target);
+		}
+	},       
         "crosschop": {
                 num: 238,
                 accuracy: 95,
@@ -329,6 +473,7 @@ exports.BattleMovedex = {
                 priority: 0,
                 onModifyMove: function(move) {
                         if (this.isWeather('raindance')) move.accuracy = true;
+						if (this.isWeather('tornado')) move.accuracy = true;
                         else if (this.isWeather('sunnyday')) move.accuracy = 50;
                 },
                 secondary: {
@@ -404,7 +549,6 @@ exports.BattleMovedex = {
                 desc: "Deals damage to one adjacent target with a 30% chance to lower its Special Attack by 1 stage.",
                 shortDesc: "30% chance to lower the target's Sp. Atk by 1.",
                 id: "lgihtbringer",
-                isViable: true,
                 name: "Light Bringer",
                 pp: 5,
                 priority: 0,

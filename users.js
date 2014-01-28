@@ -83,9 +83,44 @@ function searchUser(name) {
 	return users[userid];
 }
 
-function connectUser(socket) {
-	var connection = new Connection(socket, true);
+/*********************************************************
+ * Routing
+ *********************************************************/
+
+var connections = exports.connections = {};
+
+function socketConnect(worker, workerid, socketid, ip) {
+	var id = ''+workerid+'-'+socketid;
+	var connection = connections[id] = new Connection(id, worker, socketid, null, ip);
+
+	if (ResourceMonitor.countConnection(ip)) {
+		return connection.destroy();
+	}
+	var checkResult = Users.checkBanned(ip);
+	if (!checkResult && Users.checkRangeBanned(ip)) {
+		checkResult = '#ipban';
+	}
+	if (checkResult) {
+		console.log('CONNECT BLOCKED - IP BANNED: '+ip+' ('+checkResult+')');
+		if (checkResult === '#ipban') {
+			connection.send("|popup|Your IP ("+ip+") is on our abuse list and is permanently banned. If you are using a proxy, stop.");
+		} else {
+			connection.send("|popup|Your IP ("+ip+") used is banned under the username '"+checkResult+"''. Your ban will expire in a few days."+(config.appealurl ? " Or you can appeal at:\n" + config.appealurl:""));
+		}
+		return connection.destroy();
+	}
+	// Emergency mode connections logging
+	if (config.emergency) {
+		fs.appendFile('logs/cons.emergency.log', '[' + ip + ']\n', function(err){
+			if (err) {
+				console.log('!! Error in emergency conns log !!');
+				throw err;
+			}
+		});
+	}
+
 	var user = new User(connection);
+	connection.user = user;
 	// Generate 1024-bit challenge string.
 	require('crypto').randomBytes(128, function(ex, buffer) {
 		if (ex) {
@@ -103,8 +138,86 @@ function connectUser(socket) {
 		}
 	});
 	user.joinRoom('global', connection);
-	return connection;
+
+	Dnsbl.query(connection.ip, function(isBlocked) {
+		if (isBlocked) {
+			connection.popup("Your IP is known for abuse and has been locked. If you're using a proxy, don't.");
+			if (connection.user) connection.user.lock(true);
+		}
+	});
 }
+
+function socketDisconnect(worker, workerid, socketid) {
+	var id = ''+workerid+'-'+socketid;
+
+	var connection = connections[id];
+	if (!connection) return;
+	connection.onDisconnect();
+}
+
+function socketReceive(worker, workerid, socketid, message) {
+	var id = ''+workerid+'-'+socketid;
+
+	var connection = connections[id];
+	if (!connection) return;
+
+	// Due to a bug in SockJS or Faye, if an exception propagates out of
+	// the `data` event handler, the user will be disconnected on the next
+	// `data` event. To prevent this, we log exceptions and prevent them
+	// from propagating out of this function.
+	try {
+		// drop legacy JSON messages
+		if (message.substr(0,1) === '{') return;
+
+		// drop invalid messages without a pipe character
+		var pipeIndex = message.indexOf('|');
+		if (pipeIndex < 0) return;
+
+		var roomid = message.substr(0, pipeIndex);
+		var lines = message.substr(pipeIndex + 1);
+		var room = Rooms.get(roomid);
+		if (!room) room = Rooms.lobby || Rooms.global;
+		var user = connection.user;
+		if (!user) return;
+		if (lines.substr(0,3) === '>> ' || lines.substr(0,4) === '>>> ') {
+			user.chat(lines, room, connection);
+			return;
+		}
+		lines = lines.split('\n');
+		// Emergency logging
+		if (config.emergency) {
+			fs.appendFile('logs/emergency.log', '['+ user + ' (' + connection.ip + ')] ' + message + '\n', function(err){
+				if (err) {
+					console.log('!! Error in emergency log !!');
+					throw err;
+				}
+			});
+		}
+		for (var i=0; i<lines.length; i++) {
+			if (user.chat(lines[i], room, connection) === false) break;
+		}
+	} catch (e) {
+		var stack = e.stack + '\n\n';
+		stack += 'Additional information:\n';
+		stack += 'user = ' + user + '\n';
+		stack += 'ip = ' + connection.ip + '\n';
+		stack += 'roomid = ' + roomid + '\n';
+		stack += 'message = ' + message;
+		var err = {stack: stack};
+		if (config.crashguard) {
+			try {
+				connection.sendTo(roomid||'lobby', '|html|<div class="broadcast-red"><b>Something crashed!</b><br />Don\'t worry, we\'re working on fixing it.</div>');
+			} catch (e) {} // don't crash again...
+			process.emit('uncaughtException', err);
+		} else {
+			throw err;
+		}
+	}
+}
+
+/*********************************************************
+ * User functions
+ *********************************************************/
 
 var usergroups = {};
 function importUsergroups() {
@@ -214,13 +327,13 @@ var User = (function () {
 		if (roomid && roomid !== 'global' && roomid !== 'lobby') data = '>'+roomid+'\n'+data;
 		for (var i=0; i<this.connections.length; i++) {
 			if (roomid && !this.connections[i].rooms[roomid]) continue;
-			this.connections[i].socket.write(data);
+			this.connections[i].send(data);
 			ResourceMonitor.countNetworkUse(data.length);
 		}
 	};
 	User.prototype.send = function(data) {
 		for (var i=0; i<this.connections.length; i++) {
-			this.connections[i].socket.write(data);
+			this.connections[i].send(data);
 			ResourceMonitor.countNetworkUse(data.length);
 		}
 	};
@@ -554,11 +667,25 @@ var User = (function () {
 						invalidHost = true;
 					}
 				}
+			} else if (tokenDataSplit[1] !== userid) {
+				// outdated token
+				// (a user changed their name again since this token was created)
+				// return without clearing renamePending; the more recent rename is still pending
+				return;
 			} else {
-				console.log('verify userid mismatch: '+tokenData);
+				// a user sent an invalid token
+				if (tokenDataSplit[0] !== challenge) {
+					console.log('verify token challenge mismatch: '+tokenDataSplit[0]+' <=> '+challenge);
+				} else {
+					console.log('verify token mismatch: '+tokenData);
+				}
 			}
 		} else {
-			console.log('verify failed: '+tokenData);
+			if (!challenge) {
+				console.log('verification failed; no challenge');
+			} else {
+				console.log('verify failed: '+token);
+			}
 		}
 
 		if (invalidHost) {
@@ -744,10 +871,9 @@ var User = (function () {
 		this.connected = false;
 		this.lastConnected = Date.now();
 	};
-	User.prototype.onDisconnect = function(socket) {
-		var connection = null;
+	User.prototype.onDisconnect = function(connection) {
 		for (var i=0; i<this.connections.length; i++) {
-			if (this.connections[i].socket === socket) {
+			if (this.connections[i] === connection) {
 				// console.log('DISCONNECT: '+this.userid);
 				if (this.connections.length <= 1) {
 					this.markInactive();
@@ -756,7 +882,6 @@ var User = (function () {
 						this.isStaff = false;
 					}
 				}
-				connection = this.connections[i];
 				for (var j in connection.rooms) {
 					this.leaveRoom(connection.rooms[j], connection, true);
 				}
@@ -800,7 +925,7 @@ var User = (function () {
 			for (var j in connection.rooms) {
 				this.leaveRoom(connection.rooms[j], connection, true);
 			}
-			connection.socket.end();
+			connection.destroy();
 			--this.ips[connection.ip];
 		}
 		this.connections = [];
@@ -940,7 +1065,7 @@ var User = (function () {
 			return;
 		}
 		if (!connection.rooms[room.id]) {
-			connection.rooms[room.id] = room;
+			connection.joinRoom(room);
 			if (!this.roomCount[room.id]) {
 				this.roomCount[room.id]=1;
 				room.onJoin(this, connection);
@@ -975,7 +1100,7 @@ var User = (function () {
 						});
 					} else {
 						this.connections[i].sendTo(room.id, '|deinit');
-						delete this.connections[i].rooms[room.id];
+						this.connections[i].leaveRoom(room);
 					}
 				}
 				if (connection) {
@@ -988,7 +1113,7 @@ var User = (function () {
 			delete this.roomCount[room.id];
 		}
 	};
-	User.prototype.prepBattle = function(formatid, type, connection) {
+	User.prototype.prepBattle = function(formatid, type, connection, callback) {
 		// all validation for a battle goes through here
 		if (!connection) connection = this;
 		if (!type) type = 'challenge';
@@ -999,25 +1124,32 @@ var User = (function () {
 				message = "The server is under attack. Battles cannot be started at this time.";
 			}
 			connection.popup(message);
-			return false;
+			setImmediate(callback.bind(null, false));
+			return;
 		}
 		if (ResourceMonitor.countPrepBattle(connection.ip || connection.latestIp, this.name)) {
 			connection.popup("Due to high load, you are limited to 6 battles every 3 minutes.");
-			return false;
+			setImmediate(callback.bind(null, false));
+			return;
 		}
 
 		var format = Tools.getFormat(formatid);
 		if (!format[''+type+'Show']) {
 			connection.popup("That format is not available.");
-			return false;
+			setImmediate(callback.bind(null, false));
+			return;
 		}
 		var team = this.team;
-		var problems = Tools.validateTeam(team, formatid);
+		TeamValidator.validateTeam(formatid, team, this.finishPrepBattle.bind(this, connection, callback));
+	};
+	User.prototype.finishPrepBattle = function(connection, callback, problems, team) {
 		if (problems) {
 			connection.popup("Your team was rejected for the following reasons:\n\n- "+problems.join("\n- "));
-			return false;
+			callback(false);
+		} else {
+			this.team = team;
+			callback(true);
 		}
-		return true;
 	};
 	User.prototype.updateChallenges = function() {
 		this.send('|updatechallenges|'+JSON.stringify({
@@ -1183,32 +1315,52 @@ var User = (function () {
 })();
 
 var Connection = (function () {
-	function Connection(socket, user) {
-		this.socket = socket;
+	function Connection(id, worker, socketid, user, ip) {
+		this.id = id;
+		this.socketid = socketid;
+		this.worker = worker;
 		this.rooms = {};
 
 		this.user = user;
 
-		this.ip = '';
-		if (socket.remoteAddress) {
-			this.ip = socket.remoteAddress;
-		}
+		this.ip = ip || '';
 	}
 
 	Connection.prototype.sendTo = function(roomid, data) {
 		if (roomid && roomid.id) roomid = roomid.id;
 		if (roomid && roomid !== 'lobby') data = '>'+roomid+'\n'+data;
-		this.socket.write(data);
+		Sockets.socketSend(this.worker, this.socketid, data);
 		ResourceMonitor.countNetworkUse(data.length);
 	};
 
 	Connection.prototype.send = function(data) {
-		this.socket.write(data);
+		Sockets.socketSend(this.worker, this.socketid, data);
 		ResourceMonitor.countNetworkUse(data.length);
+	};
+
+	Connection.prototype.destroy = function() {
+		Sockets.socketDisconnect(this.worker, this.socketid);
+		this.onDisconnect();
+	};
+	Connection.prototype.onDisconnect = function() {
+		delete connections[this.id];
+		if (this.user) this.user.onDisconnect(this);
 	};
 
 	Connection.prototype.popup = function(message) {
 		this.send('|popup|'+message.replace(/\n/g,'||'));
+	};
+
+	Connection.prototype.joinRoom = function(room) {
+		if (room.id in this.rooms) return;
+		this.rooms[room.id] = room;
+		Sockets.channelAdd(this.worker, room.id, this.socketid);
+	};
+	Connection.prototype.leaveRoom = function(room) {
+		if (room.id in this.rooms) {
+			delete this.rooms[room.id];
+			Sockets.channelRemove(this.worker, room.id, this.socketid);
+		}
 	};
 
 	return Connection;
@@ -1282,7 +1434,11 @@ exports.Connection = Connection;
 exports.get = getUser;
 exports.getExact = getExactUser;
 exports.searchUser = searchUser;
-exports.connectUser = connectUser;
+
+exports.socketConnect = socketConnect;
+exports.socketDisconnect = socketDisconnect;
+exports.socketReceive = socketReceive;
+
 exports.importUsergroups = importUsergroups;
 exports.addBannedWord = addBannedWord;
 exports.removeBannedWord = removeBannedWord;

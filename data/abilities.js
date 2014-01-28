@@ -139,7 +139,7 @@ exports.BattleAbilities = {
 				if (targets[i].fainted) continue;
 				for (var j=0; j<targets[i].moveset.length; j++) {
 					var move = this.getMove(targets[i].moveset[j].move);
-					if (move.category !== 'Status' && (this.getEffectiveness(move.type, pokemon) > 0 || move.ohko)) {
+					if (move.category !== 'Status' && (this.getEffectiveness(move, pokemon) > 0 || move.ohko)) {
 						this.add('-message', pokemon.name+' shuddered! (placeholder)');
 						return;
 					}
@@ -156,7 +156,7 @@ exports.BattleAbilities = {
 		shortDesc: "Prevents foes from switching out normally unless they have immunity to Ground.",
 		onFoeModifyPokemon: function(pokemon) {
 			if (pokemon.runImmunity('Ground', false)) {
-				pokemon.trapped = true;
+				pokemon.tryTrap();
 			}
 		},
 		onFoeMaybeTrapPokemon: function(pokemon) {
@@ -172,17 +172,9 @@ exports.BattleAbilities = {
 	"aromaveil": {
 		desc: "Protects allies from attacks that limit their move choices.",
 		shortDesc: "Protects allies from attacks that limit their move choices.",
-		onStart: function(pokemon) {
-			pokemon.side.addSideCondition('aromaveil');
-		},
-		onSwitchOut: function(pokemon) {
-			pokemon.side.removeSideCondition('aromaveil');
-		},
-		effect: {
-			onTryHit: function(target, source, move) {
-				if (move && move.id in {disable:1, encore:1, healblock:1, imprison:1, taunt:1, torment:1}) {
-					return false;
-				}
+		onAllyTryHit: function(target, source, move) {
+			if (move && move.id in {disable:1, encore:1, healblock:1, imprison:1, taunt:1, torment:1}) {
+				return false;
 			}
 		},
 		id: "aromaveil",
@@ -663,7 +655,7 @@ exports.BattleAbilities = {
 		desc: "This Pokemon receives one-fourth reduced damage from Super Effective attacks.",
 		shortDesc: "This Pokemon receives 3/4 damage from super effective attacks.",
 		onSourceModifyDamage: function(damage, source, target, move) {
-			if (this.getEffectiveness(move.type, target) > 0) {
+			if (this.getEffectiveness(move, target) > 0) {
 				this.debug('Filter neutralize');
 					return this.chainModify(0.75);
 			}
@@ -783,25 +775,16 @@ exports.BattleAbilities = {
 	"flowerveil": {
 		desc: "Prevents lowering of ally Grass-type Pokemon's stats.",
 		shortDesc: "Prevents lowering of ally Grass-type Pokemon's stats.",
-		onStart: function(pokemon) {
-			pokemon.side.addSideCondition('flowerveil');
-		},
-		onSwitchOut: function(pokemon) {
-			pokemon.side.removeSideCondition('flowerveil');
-		},
-		effect: {
-			onBoost: function(boost, target, source, effect) {
-				if (source && target === source) return;
-				if (!target.hasType('Grass')) return;
-				var showMsg = false;
-				for (var i in boost) {
-					if (boost[i] < 0) {
-						delete boost[i];
-						showMsg = true;
-					}
+		onAllyBoost: function(boost, target, source, effect) {
+			if ((source && target === source) || !target.hasType('Grass')) return;
+			var showMsg = false;
+			for (var i in boost) {
+				if (boost[i] < 0) {
+					delete boost[i];
+					showMsg = true;
 				}
-				if (showMsg && !effect.secondaries) this.add("-fail", target, "unboost", "[from] ability: Flower Veil", "[of] "+target);
 			}
+			if (showMsg && !effect.secondaries) this.add("-fail", target, "unboost", "[from] ability: Flower Veil", "[of] "+target);
 		},
 		id: "flowerveil",
 		name: "Flower Veil",
@@ -887,12 +870,13 @@ exports.BattleAbilities = {
 		num: 132
 	},
 	"frisk": {
-		desc: "When this Pokemon enters the field, it identifies the opponent's held item; in double battles, the held item of an unrevealed, randomly selected opponent is identified.",
-		shortDesc: "On switch-in, this Pokemon identifies a random foe's held item.",
+		desc: "When this Pokemon enters the field, it identifies all the opponent's held items.",
+		shortDesc: "On switch-in, this Pokemon identifies the foe's held items.",
 		onStart: function(pokemon) {
 			var foeactive = pokemon.side.foe.active;
 			for (var i=0; i<foeactive.length; i++) {
-				if (foeactive[i] && foeactive[i].item) {
+				if (!foeactive[i] || foeactive[i].fainted) continue;
+				if (foeactive[i].item) {
 					this.add('-item', foeactive[i], foeactive[i].getItem().name, '[from] ability: Frisk', '[of] '+pokemon, '[identify]');
 				}
 			}
@@ -1410,20 +1394,17 @@ exports.BattleAbilities = {
 	"magician": {
 		desc: "If this Pokemon is not holding an item, it steals the held item of a target it hits with a move.",
 		shortDesc: "This Pokemon steals the held item of a target it hits with a move.",
-		onFoeAfterDamage: function(damage, target, source, move) {
-			if (source && source !== target && move) {
-				if (source.item) {
-					return;
-				}
+		onHit: function(target, source, move) {
+			// We need to hard check if the ability is Magician since the event will be run both ways.
+			if (target && target !== source && move && source.ability === 'magician') {
+				if (source.item) return;
 				var yourItem = target.takeItem(source);
-				if (!yourItem) {
-					return;
-				}
+				if (!yourItem) return;
 				if (!source.setItem(yourItem)) {
 					target.item = yourItem.id; // bypass setItem so we don't break choicelock or anything
 					return;
 				}
-				this.add('-item', source, yourItem, '[from] Magician');
+				this.add('-item', source, yourItem, '[from] ability: Magician', '[of] ' + target);
 			}
 		},
 		id: "magician",
@@ -1504,7 +1485,7 @@ exports.BattleAbilities = {
 		shortDesc: "Prevents Steel-type foes from switching out normally.",
 		onFoeModifyPokemon: function(pokemon) {
 			if (pokemon.hasType('Steel')) {
-				pokemon.trapped = true;
+				pokemon.tryTrap();
 			}
 		},
 		onFoeMaybeTrapPokemon: function(pokemon) {
@@ -1734,8 +1715,8 @@ exports.BattleAbilities = {
 		num: 96
 	},
 	"oblivious": {
-		desc: "This Pokemon cannot be infatuated (by Attract or Cute Charm). Gaining this Ability while infatuated cures it.",
-		shortDesc: "This Pokemon cannot be infatuated. Gaining this Ability while infatuated cures it.",
+		desc: "This Pokemon cannot be infatuated (by Attract or Cute Charm) or taunted. Gaining this Ability while afflicted by either condition cures it.",
+		shortDesc: "This Pokemon cannot be infatuated or taunted. Gaining this Ability cures it.",
 		onUpdate: function(pokemon) {
 			if (pokemon.volatiles['attract']) {
 				pokemon.removeVolatile('attract');
@@ -2264,10 +2245,18 @@ exports.BattleAbilities = {
 	"scrappy": {
 		desc: "This Pokemon has the ability to hit Ghost-type Pokemon with Normal-type and Fighting-type moves. Effectiveness of these moves takes into account the Ghost-type Pokemon's other weaknesses and resistances.",
 		shortDesc: "This Pokemon can hit Ghost-types with Normal- and Fighting-type moves.",
-		onFoeModifyPokemon: function(pokemon) {
-			if (pokemon.hasType('Ghost')) {
-				pokemon.negateImmunity['Normal'] = true;
-				pokemon.negateImmunity['Fighting'] = true;
+		onBeforeMove: function(pokemon, target, move) {
+			pokemon.addVolatile('scrappy');
+		},
+		effect: {
+			onAnyModifyPokemon: function(pokemon) {
+				if (pokemon.hasType('Ghost')) {
+					pokemon.negateImmunity['Normal'] = true;
+					pokemon.negateImmunity['Fighting'] = true;
+				}
+			},
+			onAfterMoveSecondarySelf: function(pokemon) {
+				pokemon.removeVolatile('scrappy');
 			}
 		},
 		id: "scrappy",
@@ -2296,7 +2285,7 @@ exports.BattleAbilities = {
 		shortDesc: "Prevents foes from switching out normally unless they also have this Ability.",
 		onFoeModifyPokemon: function(pokemon) {
 			if (pokemon.ability !== 'shadowtag') {
-				pokemon.trapped = true;
+				pokemon.tryTrap();
 			}
 		},
 		onFoeMaybeTrapPokemon: function(pokemon) {
@@ -2432,7 +2421,7 @@ exports.BattleAbilities = {
 	},
 	"sniper": {
 		desc: "When this Pokemon lands a Critical Hit, the damage is increased to another 1.5x.",
-		shortDesc: "If this Pokemon strikes with a critical hit, the damage is 2.25x instead of 1.5x.",
+		shortDesc: "If this Pokemon strikes with a critical hit, the damage is increased by 50%",
 		onModifyDamage: function(damage, source, target, move) {
 			if (move.crit) {
 				this.debug('Sniper boost');
@@ -2496,7 +2485,7 @@ exports.BattleAbilities = {
 		desc: "Super-effective attacks only deal 3/4 their usual damage against this Pokemon.",
 		shortDesc: "This Pokemon receives 3/4 damage from super effective attacks.",
 		onSourceModifyDamage: function(damage, source, target, move) {
-			if (this.getEffectiveness(move.type, target) > 0) {
+			if (this.getEffectiveness(move, target) > 0) {
 				this.debug('Solid Rock neutralize');
 				return this.chainModify(0.75);
 			}
@@ -2731,24 +2720,16 @@ exports.BattleAbilities = {
 		shortDesc: "Prevents allies from being put to Sleep.",
 		id: "sweetveil",
 		name: "Sweet Veil",
-		onStart: function(pokemon) {
-			pokemon.side.addSideCondition('sweetveil');
+		onAllySetStatus: function(status, target, source, effect) {
+			if (status.id === 'slp') {
+				this.debug('Sweet Veil interrupts sleep');
+				return false;
+			}
 		},
-		onSwitchOut: function(pokemon) {
-			pokemon.side.removeSideCondition('sweetveil');
-		},
-		effect: {
-			onSetStatus: function(status, target, source, effect) {
-				if (status.id === 'slp') {
-					this.debug('Sweet Veil interrupts sleep');
-					return false;
-				}
-			},
-			onTryHit: function(target, source, move) {
-				if (move && move.id === 'yawn') {
-					this.debug('Sweet Veil blocking yawn');
-					return false;
-				}
+		onAllyTryHit: function(target, source, move) {
+			if (move && move.id === 'yawn') {
+				this.debug('Sweet Veil blocking yawn');
+				return false;
 			}
 		},
 		rating: 0,
@@ -2882,7 +2863,7 @@ exports.BattleAbilities = {
 		desc: "This Pokemon's attacks that are not very effective on a target do double damage.",
 		shortDesc: "This Pokemon's attacks that are not very effective on a target do double damage.",
 		onModifyDamage: function(damage, source, target, move) {
-			if (this.getEffectiveness(move.type, target) < 0) {
+			if (this.getEffectiveness(move, target) < 0) {
 				this.debug('Tinted Lens boost');
 				return this.chainModify(2);
 			}
@@ -2944,13 +2925,13 @@ exports.BattleAbilities = {
 		gen: 6
 	},
 	"trace": {
-		desc: "When this Pokemon enters the field, it temporarily copies an opponent's ability (except Multitype). This ability remains with this Pokemon until it leaves the field.",
+		desc: "When this Pokemon enters the field, it temporarily copies an opponent's ability. This ability remains with this Pokemon until it leaves the field.",
 		shortDesc: "On switch-in, or when it can, this Pokemon copies a random adjacent foe's Ability.",
 		onUpdate: function(pokemon) {
 			var target = pokemon.side.foe.randomActive();
 			if (!target) return;
 			var ability = this.getAbility(target.ability);
-			var bannedAbilities = {flowergift:1, forecast:1, illusion:1, imposter:1, multitype:1, trace:1, zenmode:1};
+			var bannedAbilities = {flowergift:1, forecast:1, illusion:1, imposter:1, multitype:1, stancechange:1, trace:1, zenmode:1};
 			if (bannedAbilities[target.ability]) {
 				return;
 			}
@@ -3171,7 +3152,7 @@ exports.BattleAbilities = {
 		onTryHit: function(target, source, move) {
 			if (target === source || move.category === 'Status' || move.type === '???' || move.id === 'struggle') return;
 			this.debug('Wonder Guard immunity: '+move.id);
-			if (this.getEffectiveness(move.type, target) <= 0) {
+			if (this.getEffectiveness(move, target) <= 0) {
 				this.add('-activate', target, 'ability: Wonder Guard');
 				return null;
 			}
